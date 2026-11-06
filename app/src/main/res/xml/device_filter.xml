@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Known USB-UART bridge chips, for the USB_DEVICE_ATTACHED auto-launch intent only.
+    This does not restrict which devices UsbSerialManager can open manually from
+    DeviceConnectScreen -- it only decides when Android offers to launch this app
+    straight from the "USB device attached" system prompt. Vendor IDs are decimal,
+    per Android's device_filter schema.
+-->
+<resources>
+    <usb-device vendor-id="1027" /> <!-- FTDI (0x0403) -->
+    <usb-device vendor-id="4292" /> <!-- Silicon Labs CP210x (0x10C4) -->
+    <usb-device vendor-id="1659" /> <!-- Prolific PL2303 (0x067B) -->
+    <usb-device vendor-id="6790" /> <!-- QinHeng CH340/CH341 (0x1A86) -->
+    <usb-device vendor-id="8263" /> <!-- Texas Instruments eZ-FET/MSP-FET debug probe (0x2047) -->
+</resources>

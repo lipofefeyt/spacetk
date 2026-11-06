@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.example.spacetk.ui.ConnectScreen
 import com.example.spacetk.ui.ConnectStatus
+import com.example.spacetk.ui.DashboardScreen
 import com.example.spacetk.ui.theme.SpacetkTheme
 import com.example.spacetk.yamcs.YamcsConnection
 import com.example.spacetk.yamcs.YamcsRestClient
@@ -44,33 +45,48 @@ fun SpaceTkApp(modifier: Modifier = Modifier) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<ConnectStatus>(ConnectStatus.Idle) }
+    var activeConnection by remember { mutableStateOf<YamcsConnection?>(null) }
     val httpClient = remember { OkHttpClient() }
     val coroutineScope = rememberCoroutineScope()
 
-    ConnectScreen(
-        host = host,
-        onHostChange = { host = it },
-        port = port,
-        onPortChange = { port = it },
-        username = username,
-        onUsernameChange = { username = it },
-        password = password,
-        onPasswordChange = { password = it },
-        status = status,
-        onConnect = {
-            val connection = YamcsConnection(
-                baseUrl = "http://$host:$port",
-                username = username.ifBlank { null },
-                password = password.ifBlank { null },
-            )
-            status = ConnectStatus.Connecting
-            coroutineScope.launch {
-                status = when (val result = YamcsRestClient(connection, httpClient).connectAndFetchInstance()) {
-                    is YamcsResult.Success -> ConnectStatus.Connected(result.value)
-                    is YamcsResult.Failure -> ConnectStatus.Error(result.message)
+    val connection = activeConnection
+    if (status is ConnectStatus.Connected && connection != null) {
+        DashboardScreen(
+            connection = connection,
+            httpClient = httpClient,
+            onDisconnect = {
+                status = ConnectStatus.Idle
+                activeConnection = null
+            },
+            modifier = modifier,
+        )
+    } else {
+        ConnectScreen(
+            host = host,
+            onHostChange = { host = it },
+            port = port,
+            onPortChange = { port = it },
+            username = username,
+            onUsernameChange = { username = it },
+            password = password,
+            onPasswordChange = { password = it },
+            status = status,
+            onConnect = {
+                val newConnection = YamcsConnection(
+                    baseUrl = "http://$host:$port",
+                    username = username.ifBlank { null },
+                    password = password.ifBlank { null },
+                )
+                activeConnection = newConnection
+                status = ConnectStatus.Connecting
+                coroutineScope.launch {
+                    status = when (val result = YamcsRestClient(newConnection, httpClient).connectAndFetchInstance()) {
+                        is YamcsResult.Success -> ConnectStatus.Connected(result.value)
+                        is YamcsResult.Failure -> ConnectStatus.Error(result.message)
+                    }
                 }
-            }
-        },
-        modifier = modifier,
-    )
+            },
+            modifier = modifier,
+        )
+    }
 }

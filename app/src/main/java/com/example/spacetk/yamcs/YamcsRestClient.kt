@@ -3,7 +3,6 @@ package com.example.spacetk.yamcs
 import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -33,40 +32,12 @@ class YamcsRestClient(
 
     suspend fun connectAndFetchInstance(): YamcsResult<YamcsInstanceInfo> = withContext(Dispatchers.IO) {
         if (connection.isAuthenticated) {
-            val authResult = authenticate()
-            if (authResult is YamcsResult.Failure) return@withContext authResult
+            when (val authResult = fetchBearerToken(connection, httpClient)) {
+                is YamcsResult.Failure -> return@withContext authResult
+                is YamcsResult.Success -> bearerToken = authResult.value
+            }
         }
         fetchInstance(connection.instance)
-    }
-
-    private fun authenticate(): YamcsResult<Unit> {
-        val body = FormBody.Builder()
-            .add("grant_type", "password")
-            .add("username", connection.username.orEmpty())
-            .add("password", connection.password.orEmpty())
-            .build()
-        val request = Request.Builder()
-            .url("${connection.baseUrl}/auth/token")
-            .post(body)
-            .build()
-        val response = try {
-            httpClient.newCall(request).execute()
-        } catch (e: IOException) {
-            return YamcsResult.Failure("Could not reach ${connection.baseUrl}: ${e.message}")
-        }
-        response.use {
-            val text = it.body?.string().orEmpty()
-            if (!it.isSuccessful) {
-                return YamcsResult.Failure("Authentication failed (HTTP ${it.code}): $text")
-            }
-            val token = JSONObject(text).optString("access_token").ifBlank { null }
-            bearerToken = token
-            return if (token == null) {
-                YamcsResult.Failure("Authentication response had no access_token")
-            } else {
-                YamcsResult.Success(Unit)
-            }
-        }
     }
 
     private fun fetchInstance(name: String): YamcsResult<YamcsInstanceInfo> {

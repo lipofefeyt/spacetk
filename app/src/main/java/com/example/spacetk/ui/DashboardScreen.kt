@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -23,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -33,10 +36,14 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.spacetk.yamcs.DemoCommand
+import com.example.spacetk.yamcs.YamcsCommand
 import com.example.spacetk.yamcs.YamcsConnection
+import com.example.spacetk.yamcs.YamcsResult
 import com.example.spacetk.yamcs.YamcsWebSocketClient
 import com.example.spacetk.yamcs.WsConnectionState
 import kotlin.math.sqrt
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 
 private const val SPARKLINE_MAX_SAMPLES = 60
@@ -66,6 +73,9 @@ fun DashboardScreen(
         onDispose { wsClient.disconnect() }
     }
     val wsState by wsClient.connectionState.collectAsState()
+    val yamcsCommand = remember(connection) { YamcsCommand(connection, httpClient) }
+    val commandLog = remember { mutableStateListOf<CommandLogEntry>() }
+    val coroutineScope = rememberCoroutineScope()
 
     var dipoleX by remember { mutableStateOf<Double?>(null) }
     var dipoleY by remember { mutableStateOf<Double?>(null) }
@@ -96,6 +106,7 @@ fun DashboardScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -127,6 +138,27 @@ fun DashboardScreen(
                 modifier = Modifier.weight(1f),
             )
         }
+
+        CommandScreen(
+            onIssueCommand = { command, argValue ->
+                coroutineScope.launch {
+                    val label = command.name + (argValue?.let { " ($it)" } ?: "")
+                    when (val result = yamcsCommand.issue(command, argValue)) {
+                        is YamcsResult.Success -> commandLog.add(
+                            CommandLogEntry(
+                                label = label,
+                                outcome = "Accepted: id=${result.value.id}, at ${result.value.generationTime}",
+                                isError = false,
+                            ),
+                        )
+                        is YamcsResult.Failure -> commandLog.add(
+                            CommandLogEntry(label = label, outcome = result.message, isError = true),
+                        )
+                    }
+                }
+            },
+            results = commandLog,
+        )
     }
 }
 

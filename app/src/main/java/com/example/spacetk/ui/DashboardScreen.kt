@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ElevatedCard
@@ -85,18 +84,21 @@ fun DashboardScreen(
     val magnitudeHistory = remember { mutableStateListOf<Float>() }
 
     LaunchedEffect(wsClient) {
-        wsClient.updates.collect { update ->
-            when (update.name) {
-                "/opensvf/mtq_dipole_x" -> dipoleX = update.value
-                "/opensvf/mtq_dipole_y" -> dipoleY = update.value
-                "/opensvf/mtq_dipole_z" -> dipoleZ = update.value
-                "/opensvf/omega_norm" -> omegaNorm = update.value
-                "/opensvf/bdot_gain" -> bdotGain = update.value
+        wsClient.updates.collect { batch ->
+            batch.forEach { update ->
+                when (update.name) {
+                    "/opensvf/mtq_dipole_x" -> dipoleX = update.value
+                    "/opensvf/mtq_dipole_y" -> dipoleY = update.value
+                    "/opensvf/mtq_dipole_z" -> dipoleZ = update.value
+                    "/opensvf/omega_norm" -> omegaNorm = update.value
+                    "/opensvf/bdot_gain" -> bdotGain = update.value
+                }
             }
+            // One sample per message, taken only after all of its axes have been applied.
             val x = dipoleX
             val y = dipoleY
             val z = dipoleZ
-            if (update.name in DIPOLE_PARAMETERS && x != null && y != null && z != null) {
+            if (batch.any { it.name in DIPOLE_PARAMETERS } && x != null && y != null && z != null) {
                 magnitudeHistory.add(sqrt(x * x + y * y + z * z).toFloat())
                 if (magnitudeHistory.size > SPARKLINE_MAX_SAMPLES) magnitudeHistory.removeAt(0)
             }

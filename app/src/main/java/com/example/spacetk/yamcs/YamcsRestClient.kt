@@ -1,10 +1,8 @@
 package com.example.spacetk.yamcs
 
-import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -41,21 +39,19 @@ class YamcsRestClient(
     }
 
     private fun fetchInstance(name: String): YamcsResult<YamcsInstanceInfo> {
-        val requestBuilder = Request.Builder().url("${connection.baseUrl}/api/instances")
-        bearerToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
-        val response = try {
-            httpClient.newCall(requestBuilder.build()).execute()
-        } catch (e: IOException) {
-            return YamcsResult.Failure("Could not reach ${connection.baseUrl}: ${e.message}")
+        val result = executeForBody(connection, httpClient, "/api/instances") {
+            bearerToken?.let { header("Authorization", "Bearer $it") }
         }
-        response.use {
-            val text = it.body?.string().orEmpty()
-            if (!it.isSuccessful) {
-                return YamcsResult.Failure("HTTP ${it.code} from ${connection.baseUrl}: $text")
+        return when (result) {
+            is YamcsResult.Failure -> result
+            is YamcsResult.Success -> parsingJson(connection) {
+                val info = parseInstance(result.value, name)
+                if (info == null) {
+                    YamcsResult.Failure("Instance '$name' not found in response from ${connection.baseUrl}")
+                } else {
+                    YamcsResult.Success(info)
+                }
             }
-            val info = parseInstance(text, name)
-                ?: return YamcsResult.Failure("Instance '$name' not found in response from ${connection.baseUrl}")
-            return YamcsResult.Success(info)
         }
     }
 

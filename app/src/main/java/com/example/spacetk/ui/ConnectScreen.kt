@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -95,18 +94,12 @@ fun ConnectScreen(
 
         when (status) {
             is ConnectStatus.Connecting -> CircularProgressIndicator()
-            is ConnectStatus.Connected -> ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("Connected to '${status.info.name}'" + (status.info.state?.let { " ($it)" } ?: ""))
-                    Text("Parameters: ${status.info.parameterCount ?: "unknown"}")
-                    Text("Commands: ${status.info.commandCount ?: "unknown"}")
-                }
-            }
             is ConnectStatus.Error -> Text(
                 "Error: ${status.message}",
                 color = MaterialTheme.colorScheme.error,
             )
-            is ConnectStatus.Idle -> {}
+            // Once connected, MainActivity shows DashboardScreen instead.
+            is ConnectStatus.Connected, ConnectStatus.Idle -> {}
         }
     }
 }

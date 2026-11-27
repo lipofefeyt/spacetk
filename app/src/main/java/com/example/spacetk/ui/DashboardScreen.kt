@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import com.example.spacetk.yamcs.DemoCommand
 import com.example.spacetk.yamcs.YamcsCommand
 import com.example.spacetk.yamcs.YamcsConnection
+import com.example.spacetk.yamcs.YamcsInstanceInfo
 import com.example.spacetk.yamcs.YamcsResult
 import com.example.spacetk.yamcs.YamcsWebSocketClient
 import com.example.spacetk.yamcs.WsConnectionState
@@ -60,6 +61,7 @@ private val DIPOLE_PARAMETERS = listOf(
 @Composable
 fun DashboardScreen(
     connection: YamcsConnection,
+    info: YamcsInstanceInfo,
     httpClient: OkHttpClient,
     onDisconnect: () -> Unit,
     modifier: Modifier = Modifier,
@@ -117,7 +119,12 @@ fun DashboardScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column {
-                Text("Connected to '${connection.instance}'", style = MaterialTheme.typography.titleMedium)
+                Text("Connected to '${info.name}'", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Parameters: ${info.parameterCount ?: "unknown"} · " +
+                        "Commands: ${info.commandCount ?: "unknown"}",
+                    style = MaterialTheme.typography.bodySmall,
+                )
                 Text(wsState.label(), style = MaterialTheme.typography.bodySmall)
             }
             TextButton(onClick = onDisconnect) { Text("Disconnect") }
@@ -149,7 +156,8 @@ fun DashboardScreen(
                         is YamcsResult.Success -> commandLog.add(
                             CommandLogEntry(
                                 label = label,
-                                outcome = "Accepted: id=${result.value.id}, at ${result.value.generationTime}",
+                                outcome = "Sent to YAMCS at ${result.value.generationTime}, " +
+                                    "id=${result.value.id}. Spacecraft acceptance not checked.",
                                 isError = false,
                             ),
                         )

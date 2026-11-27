@@ -73,7 +73,7 @@ fun SpaceTkApp(modifier: Modifier = Modifier) {
             status = status,
             onConnect = {
                 val newConnection = YamcsConnection(
-                    baseUrl = "http://$host:$port",
+                    baseUrl = "http://${host.trim()}:${port.trim()}",
                     username = username.ifBlank { null },
                     password = password.ifBlank { null },
                 )

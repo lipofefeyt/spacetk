@@ -1,11 +1,9 @@
 package com.example.spacetk.yamcs
 
-import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
@@ -48,31 +46,26 @@ class YamcsCommand(
             val requestBody = JSONObject().put("args", argsJson).toString()
                 .toRequestBody("application/json".toMediaType())
 
-            val url = "${connection.baseUrl}/api/processors/${connection.instance}/" +
+            val path = "/api/processors/${connection.instance}/" +
                 "${connection.processor}/commands${command.qualifiedName}"
-            val requestBuilder = Request.Builder().url(url).post(requestBody)
-            bearerToken?.let { requestBuilder.header("Authorization", "Bearer $it") }
-
-            val response = try {
-                httpClient.newCall(requestBuilder.build()).execute()
-            } catch (e: IOException) {
-                return@withContext YamcsResult.Failure("Could not reach ${connection.baseUrl}: ${e.message}")
+            val result = executeForBody(connection, httpClient, path) {
+                post(requestBody)
+                bearerToken?.let { header("Authorization", "Bearer $it") }
             }
-            response.use {
-                val text = it.body?.string().orEmpty()
-                if (!it.isSuccessful) {
-                    return@withContext YamcsResult.Failure(
-                        "HTTP ${it.code} issuing ${command.qualifiedName}: $text",
+            when (result) {
+                is YamcsResult.Failure -> YamcsResult.Failure(
+                    "Could not issue ${command.qualifiedName}: ${result.message}",
+                )
+                is YamcsResult.Success -> parsingJson(connection) {
+                    val json = JSONObject(result.value)
+                    YamcsResult.Success(
+                        CommandAck(
+                            commandName = json.optString("commandName", command.qualifiedName),
+                            id = json.optString("id").ifBlank { null },
+                            generationTime = json.optString("generationTime").ifBlank { null },
+                        ),
                     )
                 }
-                val json = JSONObject(text)
-                YamcsResult.Success(
-                    CommandAck(
-                        commandName = json.optString("commandName", command.qualifiedName),
-                        id = json.optString("id").ifBlank { null },
-                        generationTime = json.optString("generationTime").ifBlank { null },
-                    ),
-                )
             }
         }
 }

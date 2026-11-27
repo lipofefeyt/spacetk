@@ -1,9 +1,7 @@
 package com.example.spacetk.yamcs
 
-import java.io.IOException
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.json.JSONObject
 
 /**
@@ -17,25 +15,16 @@ internal fun fetchBearerToken(connection: YamcsConnection, httpClient: OkHttpCli
         .add("username", connection.username.orEmpty())
         .add("password", connection.password.orEmpty())
         .build()
-    val request = Request.Builder()
-        .url("${connection.baseUrl}/auth/token")
-        .post(body)
-        .build()
-    val response = try {
-        httpClient.newCall(request).execute()
-    } catch (e: IOException) {
-        return YamcsResult.Failure("Could not reach ${connection.baseUrl}: ${e.message}")
-    }
-    response.use {
-        val text = it.body?.string().orEmpty()
-        if (!it.isSuccessful) {
-            return YamcsResult.Failure("Authentication failed (HTTP ${it.code}): $text")
-        }
-        val token = JSONObject(text).optString("access_token").ifBlank { null }
-        return if (token == null) {
-            YamcsResult.Failure("Authentication response had no access_token")
-        } else {
-            YamcsResult.Success(token)
+    val result = executeForBody(connection, httpClient, "/auth/token") { post(body) }
+    return when (result) {
+        is YamcsResult.Failure -> YamcsResult.Failure("Authentication failed: ${result.message}")
+        is YamcsResult.Success -> parsingJson(connection) {
+            val token = JSONObject(result.value).optString("access_token").ifBlank { null }
+            if (token == null) {
+                YamcsResult.Failure("Authentication response had no access_token")
+            } else {
+                YamcsResult.Success(token)
+            }
         }
     }
 }

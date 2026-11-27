@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -38,18 +39,23 @@ class YamcsWebSocketClient(
     private var nextCallId = 1
     private val numericIdToName = mutableMapOf<Int, String>()
 
-    private val _updates = MutableSharedFlow<ParameterUpdate>(extraBufferCapacity = 64)
-    val updates: SharedFlow<ParameterUpdate> = _updates.asSharedFlow()
+    // One list per server message, so values sampled together stay together.
+    private val _updates = MutableSharedFlow<List<ParameterUpdate>>(extraBufferCapacity = 64)
+    val updates: SharedFlow<List<ParameterUpdate>> = _updates.asSharedFlow()
 
     private val _connectionState = MutableStateFlow<WsConnectionState>(WsConnectionState.Disconnected)
     val connectionState: StateFlow<WsConnectionState> = _connectionState.asStateFlow()
 
     fun connectAndSubscribe(parameterNames: List<String>) {
-        val wsUrl = connection.baseUrl
-            .replaceFirst("http://", "ws://")
-            .replaceFirst("https://", "wss://") + "/api/websocket"
+        // OkHttp upgrades an http(s) URL to ws(s) itself.
+        val url = "${connection.baseUrl}/api/websocket".toHttpUrlOrNull()
+        if (url == null) {
+            _connectionState.value =
+                WsConnectionState.Error("Invalid server address: ${connection.baseUrl}")
+            return
+        }
         val request = Request.Builder()
-            .url(wsUrl)
+            .url(url)
             .header("Sec-WebSocket-Protocol", "json")
             .build()
         _connectionState.value = WsConnectionState.Connecting
@@ -67,6 +73,12 @@ class YamcsWebSocketClient(
 
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                     _connectionState.value = WsConnectionState.Error(t.message ?: "WebSocket failure")
+                }
+
+                // Server-initiated close: answer it, otherwise onClosed is never reached.
+                override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                    webSocket.close(1000, null)
+                    _connectionState.value = WsConnectionState.Disconnected
                 }
 
                 override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -111,14 +123,16 @@ class YamcsWebSocketClient(
         }
 
         val values = data.optJSONArray("values") ?: return
+        val batch = mutableListOf<ParameterUpdate>()
         for (i in 0 until values.length()) {
             val value = values.optJSONObject(i) ?: continue
             val numericId = value.optInt("numericId", -1)
             val name = numericIdToName[numericId] ?: continue
             val numeric = (value.optJSONObject("engValue") ?: value.optJSONObject("rawValue"))
                 ?.let(::extractNumeric)
-            _updates.tryEmit(ParameterUpdate(name, numeric))
+            batch.add(ParameterUpdate(name, numeric))
         }
+        if (batch.isNotEmpty()) _updates.tryEmit(batch)
     }
 
     fun disconnect() {

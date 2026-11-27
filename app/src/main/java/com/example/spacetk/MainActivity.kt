@@ -50,9 +50,11 @@ fun SpaceTkApp(modifier: Modifier = Modifier) {
     val coroutineScope = rememberCoroutineScope()
 
     val connection = activeConnection
-    if (status is ConnectStatus.Connected && connection != null) {
+    val currentStatus = status
+    if (currentStatus is ConnectStatus.Connected && connection != null) {
         DashboardScreen(
             connection = connection,
+            info = currentStatus.info,
             httpClient = httpClient,
             onDisconnect = {
                 status = ConnectStatus.Idle
